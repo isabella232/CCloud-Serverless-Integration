@@ -51,10 +51,16 @@ scratch.txt
 aws-cli/configs.sh
 aws-cli/aws-ccloud-creds.json
 java-service-account-*.config
+azure-ccloud/bin
+azure-ccloud/obj
+azure-kafka-direct/bin
+azure-kafka-direct/obj
 ccloud_library.sh
 confluent.properties
 *.out
 !gradle/wrapper/gradle-wrapper.jar
+aws-results.json
+azure-ccloud-notes.txt
 
 
 credentials

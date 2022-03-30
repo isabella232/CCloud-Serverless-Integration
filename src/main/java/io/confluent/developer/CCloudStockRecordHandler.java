@@ -6,14 +6,11 @@ import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.confluent.developer.proto.TradeSettlementProto;
-import io.confluent.developer.proto.TradeSettlementProto.TradeSettlement;
-import io.confluent.developer.proto.TradeSettlementProto.TradeSettlement.Builder;
+import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.Producer;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.util.Utf8;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import software.amazon.awssdk.regions.Region;
@@ -21,19 +18,16 @@ import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueResponse;
 
-import java.time.Instant;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Random;
 
 public class CCloudStockRecordHandler implements RequestHandler<Map<String, Object>, Void> {
-    private final Producer<String, TradeSettlementProto.TradeSettlement> producer;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final Map<String, Object> configs = new HashMap<>();
     private final StringDeserializer stringDeserializer = new StringDeserializer();
+    private final KafkaAvroDeserializer kafkaAvroDeserializer = new KafkaAvroDeserializer();
 
     public CCloudStockRecordHandler() {
         configs.putAll(getSecretsConfigs());
@@ -45,9 +39,8 @@ public class CCloudStockRecordHandler implements RequestHandler<Map<String, Obje
         configs.put(ProducerConfig.CLIENT_DNS_LOOKUP_CONFIG, "use_all_dns_ips");
         configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaProtobufSerializer.class);
-        
-        producer = new KafkaProducer<>(configs);
         stringDeserializer.configure(configs, false);
+        kafkaAvroDeserializer.configure(configs, false);
     }
 
     @Override
@@ -61,59 +54,27 @@ public class CCloudStockRecordHandler implements RequestHandler<Map<String, Obje
                 logger.log("Topic-Partition for this batch of records " + key +" number records in batch " + recordList.size());
             recordList.forEach(recordMap -> {
                 byte[] keyBytes;
-                String tradeKey = null;
+                String callSign = null;
                 if (recordMap.containsKey("key")) {
                     keyBytes = decode(recordMap.get("key"));
-                    tradeKey = stringDeserializer.deserialize("", keyBytes);
+                    callSign = stringDeserializer.deserialize("", keyBytes);
                 }
                 byte[] bytes = decode(recordMap.get("value"));
-                Map<String, Object> trade = getMapFromString(stringDeserializer.deserialize("", bytes));
-                logger.log("Record key is " + tradeKey + " Record value is " + trade);
-                Instant now = Instant.now();
-                int secInspection = new Random().nextInt(100);
-                Builder builder = TradeSettlement.newBuilder();
-                int shares = (Integer)trade.get("QUANTITY");
-                int price = (Integer)trade.get("PRICE");
-                builder.setAmount(((double)shares * price));
-                builder.setUser(Objects.requireNonNullElse(tradeKey, "NO USER"));
-                builder.setSymbol((String)trade.get("SYMBOL"));
-                builder.setTimestamp(now.toEpochMilli());
-                String disposition;
-                String reason;
-
-                if (builder.getUser().equals("NO USER")) {
-                    disposition = "Rejected";
-                    reason = "No user account specified";
-                } else if (builder.getAmount() > 100000) {
-                    disposition = "Pending";
-                    reason = "Large trade";
-                } else if (secInspection < 30) {
-                    disposition = "SEC Flagged";
-                    reason = "This trade looks sus";
-                } else {
-                    disposition = "Completed";
-                    reason = "Within same day limit";
-                }
-                builder.setDisposition(disposition);
-                builder.setReason(reason);
-
-                TradeSettlement tradeSettlement = builder.build();
-
-                logger.log("Trade Settlement result " + tradeSettlement);
-                ProducerRecord<String, TradeSettlement> settlementRecord = new ProducerRecord<>("trade-settlements", tradeSettlement.getSymbol(), tradeSettlement);
-                producer.send(settlementRecord , (metadata, exception) -> {
-                    if (exception != null) {
-                        logger.log("Caught exception trying to produce " + exception.getMessage());
-                    } else {
-                        String message = String.format("Sent record to CCloud Kafka topic=%s, offset=%d, timestamp=%s", metadata.topic(), metadata.offset(), metadata.timestamp());
-                        logger.log(message);
-                    }
-                });
+                GenericRecord flightDelay = (GenericRecord) kafkaAvroDeserializer.deserialize("", bytes);
+                logger.log("Record key is " + callSign + " Record value is " + flightDelay);
+                Object customerNameObject = flightDelay.get("CUSTOMERNAME");
+                String customerName = customerNameObject != null ? customerNameObject instanceof Utf8 ? customerNameObject.toString() : (String) customerNameObject : "nullname";
+                Object emailObject = flightDelay.get("EMAIL");
+                String email = emailObject != null ? emailObject instanceof Utf8 ? emailObject.toString() : (String) emailObject : "nullemil";
+                Object arrivalCodeObject = flightDelay.get("ARRIVAL_CODE");
+                String arrivalCode =   arrivalCodeObject != null ? arrivalCodeObject instanceof Utf8 ? arrivalCodeObject.toString() : (String) arrivalCodeObject : "nullarrivalcode";
+                Object timeDelayObject =  flightDelay.get("TIME_DELAY");
+                long timeDelay = timeDelayObject != null ? (Long) timeDelayObject : 0L;
+                logger.log(String.format("Received the following Customer Name:[%s], Email:[%s], Arrival Code:[%s], Delay(seconds):[%d]",
+                        customerName, email,arrivalCode, timeDelay));
             });
         });
-        logger.log("Done processing, flushing all records now");
-        producer.flush();
-
+        logger.log("Done processing all flight delays");
         return null;
     }
 

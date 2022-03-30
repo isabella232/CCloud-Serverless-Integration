@@ -82,7 +82,7 @@ read -p "This will install the AWS resources need for this demo.  Enter y if you
 
       echo "Adding a CCloud topic as an event source "
       aws lambda create-event-source-mapping --profile "${PROFILE}" --region "${REGION}" \
-          --topics user_trades \
+          --topics notify_customers \
           --source-access-configuration Type=BASIC_AUTH,URI=arn:aws:secretsmanager:us-west-2:"${ACCOUNT_NUM}":secret:"${CREDS_NAME}" \
           --function-name arn:aws:lambda:us-west-2:"${ACCOUNT_NUM}":function:"${FUNCTION_NAME}" \
           --self-managed-event-source '{"Endpoints":{"KAFKA_BOOTSTRAP_SERVERS":["'${BOOTSTRAP_SERVERS}'"]}}'  | tee -a aws-results.out
