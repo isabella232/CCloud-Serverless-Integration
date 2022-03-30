@@ -6,10 +6,7 @@ import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.util.Utf8;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -23,13 +20,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class CCloudStockRecordHandler implements RequestHandler<Map<String, Object>, Void> {
+public class NotificationsRecordsHandler implements RequestHandler<Map<String, Object>, Void> {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final Map<String, Object> configs = new HashMap<>();
     private final StringDeserializer stringDeserializer = new StringDeserializer();
-    private final KafkaAvroDeserializer kafkaAvroDeserializer = new KafkaAvroDeserializer();
 
-    public CCloudStockRecordHandler() {
+    public NotificationsRecordsHandler() {
         configs.putAll(getSecretsConfigs());
         configs.put("security.protocol", "SASL_SSL");
         configs.put("sasl.mechanism", "PLAIN");
@@ -40,7 +36,6 @@ public class CCloudStockRecordHandler implements RequestHandler<Map<String, Obje
         configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaProtobufSerializer.class);
         stringDeserializer.configure(configs, false);
-        kafkaAvroDeserializer.configure(configs, false);
     }
 
     @Override
@@ -60,17 +55,17 @@ public class CCloudStockRecordHandler implements RequestHandler<Map<String, Obje
                     callSign = stringDeserializer.deserialize("", keyBytes);
                 }
                 byte[] bytes = decode(recordMap.get("value"));
-                GenericRecord flightDelay = (GenericRecord) kafkaAvroDeserializer.deserialize("", bytes);
+                Map<String, Object> flightDelay = getMapFromString(stringDeserializer.deserialize("", bytes));
                 logger.log("Record key is " + callSign + " Record value is " + flightDelay);
                 Object customerNameObject = flightDelay.get("CUSTOMERNAME");
-                String customerName = customerNameObject != null ? customerNameObject instanceof Utf8 ? customerNameObject.toString() : (String) customerNameObject : "nullname";
+                String customerName = customerNameObject != null ?  (String) customerNameObject : "nullname";
                 Object emailObject = flightDelay.get("EMAIL");
-                String email = emailObject != null ? emailObject instanceof Utf8 ? emailObject.toString() : (String) emailObject : "nullemil";
+                String email = emailObject != null ? (String) emailObject : "nullemil";
                 Object arrivalCodeObject = flightDelay.get("ARRIVAL_CODE");
-                String arrivalCode =   arrivalCodeObject != null ? arrivalCodeObject instanceof Utf8 ? arrivalCodeObject.toString() : (String) arrivalCodeObject : "nullarrivalcode";
+                String arrivalCode =   arrivalCodeObject != null ? (String) arrivalCodeObject : "nullarrivalcode";
                 Object timeDelayObject =  flightDelay.get("TIME_DELAY");
-                long timeDelay = timeDelayObject != null ? (Long) timeDelayObject : 0L;
-                logger.log(String.format("Received the following Customer Name:[%s], Email:[%s], Arrival Code:[%s], Delay(seconds):[%d]",
+                int timeDelay = timeDelayObject != null ? (Integer) timeDelayObject : 0;
+                logger.log(String.format("Received the following JSON notification - Customer Name:[%s], Email:[%s], Arrival Code:[%s], Delay(seconds):[%d]",
                         customerName, email,arrivalCode, timeDelay));
             });
         });

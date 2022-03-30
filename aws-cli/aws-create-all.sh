@@ -77,12 +77,12 @@ read -p "This will install the AWS resources need for this demo.  Enter y if you
         --memory-size 512 \
         --timeout 600 \
         --zip-file fileb://../build/distributions/confluent-lambda-serverless-1.0-SNAPSHOT.zip \
-        --handler io.confluent.developer.CCloudStockRecordHandler::handleRequest \
+        --handler io.confluent.developer.NotificationsRecordsHandler::handleRequest \
         --runtime java11  --role arn:aws:iam::"${ACCOUNT_NUM}":role/"${ROLE_NAME}" | tee -a aws-results.out
 
       echo "Adding a CCloud topic as an event source "
       aws lambda create-event-source-mapping --profile "${PROFILE}" --region "${REGION}" \
-          --topics notify_customers \
+          --topics "${TOPIC}" \
           --source-access-configuration Type=BASIC_AUTH,URI=arn:aws:secretsmanager:us-west-2:"${ACCOUNT_NUM}":secret:"${CREDS_NAME}" \
           --function-name arn:aws:lambda:us-west-2:"${ACCOUNT_NUM}":function:"${FUNCTION_NAME}" \
           --self-managed-event-source '{"Endpoints":{"KAFKA_BOOTSTRAP_SERVERS":["'${BOOTSTRAP_SERVERS}'"]}}'  | tee -a aws-results.out

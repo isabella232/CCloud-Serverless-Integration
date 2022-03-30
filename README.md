@@ -207,7 +207,7 @@ Create the lambda
     "FunctionArn": "arn:aws:lambda:us-west-2:343223495109:function:CCloudLambdaIntegrationFunction",
     "Runtime": "java11",
     "Role": "arn:aws:iam::343223495109:role/CCloud-lambda-role",
-    "Handler": "io.confluent.developer.CCloudStockRecordHandler::handleRequest",
+    "Handler": "io.confluent.developer.NotificationsRecordsHandler::handleRequest",
     "CodeSize": 35995756,
     "Description": "",
     "Timeout": 600,
