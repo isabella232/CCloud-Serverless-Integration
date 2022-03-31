@@ -13,6 +13,8 @@
         "logs:CreateLogGroup",
         "logs:PutLogEvents",
         "logs:CreateLogStream",
+        "ses:SendEmail",
+        "ses:SendRawEmail",
         "xray:PutTraceSegments",
         "xray:PutTelemetryRecords",
         "xray:GetSamplingRules",
